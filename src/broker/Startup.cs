@@ -13,6 +13,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpenServiceBroker;
 using OpenServiceBroker.Catalogs;
+using OpenServiceBroker.Instances;
 
 namespace broker
 {
@@ -33,6 +34,7 @@ namespace broker
 
             services
                 .AddTransient<ICatalogService, CatalogService>()
+                .AddTransient<IServiceInstanceBlocking, ServiceInstanceBlocking>()
                 .AddOpenServiceBroker();
         }
 

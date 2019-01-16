@@ -2,7 +2,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using OpenServiceBroker.Instances;
 
-namespace Broker.Lib
+namespace broker.Lib
 {
     public class ServiceInstanceBlocking : IServiceInstanceBlocking
     {

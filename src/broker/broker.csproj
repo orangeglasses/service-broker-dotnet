@@ -4,9 +4,11 @@
     <TargetFramework>netcoreapp2.2</TargetFramework>
     <AspNetCoreHostingModel>InProcess</AspNetCoreHostingModel>
     <LangVersion>7.3</LangVersion>
+    <UserSecretsId>DF78845C-7E37-44B8-A5EC-911DBD9CEF6E</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="idunno.Authentication.Basic" Version="2.1.1" />
     <PackageReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Microsoft.AspNetCore.Razor.Design" Version="2.2.0" PrivateAssets="All" />
     <PackageReference Include="NewtonSoft.Json" Version="12.0.1" />

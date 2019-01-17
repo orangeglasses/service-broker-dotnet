@@ -31,8 +31,6 @@ namespace broker
                 {
                     // Add authorize filter globally for all controllers.
                     options.Filters.Add(new AuthorizeFilter());
-
-                    // options.EnableEndpointRouting = false;
                 })
                 .SetCompatibilityVersion(CompatibilityVersion.Version_2_2);
 

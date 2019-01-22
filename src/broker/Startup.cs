@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OpenServiceBroker;
+using OpenServiceBroker.Bindings;
 using OpenServiceBroker.Catalogs;
 using OpenServiceBroker.Instances;
 
@@ -37,6 +38,7 @@ namespace broker
             services
                 .AddTransient<ICatalogService, CatalogService>()
                 .AddTransient<IServiceInstanceBlocking, ServiceInstanceBlocking>()
+                .AddTransient<IServiceBindingBlocking, ServiceBindingBlocking>()
                 .AddOpenServiceBroker();
 
             services

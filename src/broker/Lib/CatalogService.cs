@@ -36,9 +36,8 @@ namespace broker.Lib
                         Name = "rwwilden",
                         Description = "The magnificent and well-known rwwilden service",
 
-                        // Since this service broker will not yet have support for binding services to applications,
-                        // these properties are set to false.
-                        Bindable = false,
+                        // This service broker now has support for service binding so we will set this property to true.
+                        Bindable = true,
                         BindingsRetrievable = false,
 
                         // This service broker will be used to provision instances so fetching them should also be supported.

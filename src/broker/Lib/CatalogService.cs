@@ -55,6 +55,7 @@ namespace broker.Lib
                                 Id = BasicPlanId,
                                 Name = "basic",
                                 Description = "Basic plan",
+                                Bindable = true,
                                 Free = true,
                                 Metadata = BasicPlanMetadata
                             }

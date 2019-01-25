@@ -15,7 +15,7 @@ namespace broker.Lib
 
         public Task<ServiceInstanceProvision> ProvisionAsync(ServiceInstanceContext context, ServiceInstanceProvisionRequest request)
         {
-            LogContext(_log, context);
+            LogContext(_log, "Provision", context);
             LogRequest(_log, request);
 
             return Task.FromResult(new ServiceInstanceProvision());
@@ -23,7 +23,7 @@ namespace broker.Lib
 
         public Task DeprovisionAsync(ServiceInstanceContext context, string serviceId, string planId)
         {
-            LogContext(_log, context);
+            LogContext(_log, "Deprovision", context);
             _log.LogInformation($"Deprovision: {{ service_id = {serviceId}, planId = {planId} }}");
 
             return Task.CompletedTask;
@@ -39,10 +39,10 @@ namespace broker.Lib
             throw new System.NotImplementedException();
         }
 
-        private static void LogContext(ILogger log, ServiceInstanceContext context)
+        private static void LogContext(ILogger log, string operation, ServiceInstanceContext context)
         {
             log.LogInformation(
-                $"Provision - context: {{ instance_id = {context.InstanceId}, " +
+                $"{operation} - context: {{ instance_id = {context.InstanceId}, " +
                                         $"originating_identity = {{ platform = {context.OriginatingIdentity?.Platform}, " +
                                                                   $"value = {context.OriginatingIdentity?.Value} }} }}");
         }

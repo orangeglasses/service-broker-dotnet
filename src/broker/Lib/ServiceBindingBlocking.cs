@@ -22,7 +22,7 @@ namespace broker.Lib
 
             return Task.FromResult(new ServiceBinding
             {
-                Credentials = new JObject(new
+                Credentials = JObject.FromObject(new
                 {
                     connectionString = "<very secret connection string>"
                 })

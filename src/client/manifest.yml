@@ -1,0 +1,8 @@
+---
+applications:
+- name: rwwilden-client
+  memory: 128M
+  disk: 500M
+  instances: 1
+  buildpacks:
+  - dotnet_core_buildpack

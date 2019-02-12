@@ -1,0 +1,2 @@
+az provider operation show --namespace Microsoft.Resources > resource-ops.json
+az provider operation show --namespace Microsoft.Storage > storage-ops.json

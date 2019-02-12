@@ -1,0 +1,7 @@
+az role definition list --custom-role-only true
+
+
+
+az role assignment list --assignee 5afa5a58-fa38-4122-a114-34b989ed88b4 
+az role assignment delete --assignee 5afa5a58-fa38-4122-a114-34b989ed88b4
+

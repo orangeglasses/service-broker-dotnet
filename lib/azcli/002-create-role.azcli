@@ -1,0 +1,2 @@
+az role definition create --role-definition service-broker-role.json
+az role definition update --role-definition service-broker-role.json

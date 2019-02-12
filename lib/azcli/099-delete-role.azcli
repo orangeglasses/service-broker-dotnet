@@ -1,0 +1,1 @@
+az role definition delete --name 'Azure Storage Service Broker'

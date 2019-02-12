@@ -1,0 +1,3 @@
+az ad sp list --display-name 'Azure Storage Service Broker'
+
+az role assignment create --assignee-object-id 5afa5a58-fa38-4122-a114-34b989ed88b4 --role 'Azure Storage Service Broker'

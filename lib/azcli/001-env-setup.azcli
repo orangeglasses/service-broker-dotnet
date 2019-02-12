@@ -1,0 +1,5 @@
+az login
+
+az configure --defaults location=westeurope
+
+az account set --subscription 4c70a177-b978-43f9-9fc0-1e50dd20271f

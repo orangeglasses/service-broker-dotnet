@@ -1,4 +1,9 @@
+using System.Collections.Generic;
 using System.Threading.Tasks;
+using azure.ResourceGroups;
+using azure.ResourceGroups.Model;
+using azure.Storage;
+using azure.Storage.Model;
 using Microsoft.Extensions.Logging;
 using OpenServiceBroker.Instances;
 
@@ -6,25 +11,102 @@ namespace broker.Lib
 {
     public class ServiceInstanceBlocking : IServiceInstanceBlocking
     {
+        private readonly IAzureResourceGroupClient _azureResourceGroupClient;
+        private readonly IAzureStorageProviderClient _azureStorageProviderClient;
+        private readonly IAzureStorageClient _azureStorageClient;
         private readonly ILogger<ServiceInstanceBlocking> _log;
 
-        public ServiceInstanceBlocking(ILogger<ServiceInstanceBlocking> log)
+        public ServiceInstanceBlocking(
+            IAzureResourceGroupClient azureResourceGroupClient,
+            IAzureStorageProviderClient azureStorageProviderClient,
+            IAzureStorageClient azureStorageClient,
+            ILogger<ServiceInstanceBlocking> log)
         {
+            _azureResourceGroupClient = azureResourceGroupClient;
+            _azureStorageProviderClient = azureStorageProviderClient;
+            _azureStorageClient = azureStorageClient;
             _log = log;
         }
 
-        public Task<ServiceInstanceProvision> ProvisionAsync(ServiceInstanceContext context, ServiceInstanceProvisionRequest request)
+        public async Task<ServiceInstanceProvision> ProvisionAsync(ServiceInstanceContext context, ServiceInstanceProvisionRequest request)
         {
             LogContext(_log, "Provision", context);
             LogRequest(_log, request);
 
-            return Task.FromResult(new ServiceInstanceProvision());
+            var orgId = request.OrganizationGuid;
+            var spaceId = request.SpaceGuid;
+            var resourceGroupName = $"{orgId}_{spaceId}";
+            var exists = await _azureResourceGroupClient.ResourceGroupExists(resourceGroupName);
+
+            // Create resource group if it does not yet exist.
+            if (exists)
+            {
+                _log.LogInformation($"Resource group {resourceGroupName} exists.");
+            }
+            else
+            {
+                _log.LogInformation($"Resource group {resourceGroupName} does not exist: creating.");
+
+                var resourceGroup = await _azureResourceGroupClient.CreateResourceGroup(new ResourceGroup
+                {
+                    Name = resourceGroupName,
+                    Location = "westeurope",
+                    Tags = new Dictionary<string, string>
+                    {
+                        { "cf_org_id", orgId },
+                        { "cf_space_id", spaceId }
+                    }
+                });
+                _log.LogInformation($"Resource group {resourceGroupName} created: {resourceGroup.Id}.");
+            }
+
+            // Create storage account.
+            var storageAccountName = context.InstanceId.Replace("-", "").Substring(0, 24);
+            await _azureStorageClient.CreateStorageAccount(
+                resourceGroupName,
+                new StorageAccount
+                {
+                    Name = storageAccountName,
+                    Kind = StorageKind.StorageV2,
+                    Location = "westeurope",
+                    Properties = new StorageAccountProperties
+                    {
+                        AccessTier = StorageAccessTier.Hot,
+                        Encryption = new StorageEncryption
+                        {
+                            KeySource = StorageEncryptionKeySource.Storage,
+                            Services = new StorageEncryptionServices
+                            {
+                                Blob = new StorageEncryptionService { Enabled = true },
+                                File = new StorageEncryptionService { Enabled = true },
+                                Table = new StorageEncryptionService { Enabled = true },
+                                Queue = new StorageEncryptionService { Enabled = true }
+                            }
+                        },
+                        SupportsHttpsTrafficOnly = true
+                    },
+                    Sku = new StorageSku
+                    {
+                        Name = StorageSkuName.Standard_LRS,
+                        Tier = StorageSkuTier.Standard
+                    },
+                    Tags = new Dictionary<string, string>
+                    {
+                        { "cf_org_id", orgId },
+                        { "cf_space_id", spaceId },
+                        { "cf_service_instance_id", context.InstanceId }
+                    }
+                });
+
+            return new ServiceInstanceProvision();
         }
 
         public Task DeprovisionAsync(ServiceInstanceContext context, string serviceId, string planId)
         {
             LogContext(_log, "Deprovision", context);
             _log.LogInformation($"Deprovision: {{ service_id = {serviceId}, planId = {planId} }}");
+
+
 
             return Task.CompletedTask;
         }

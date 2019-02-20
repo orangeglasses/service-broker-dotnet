@@ -9,6 +9,8 @@ namespace azure.Auth
 {
     internal class AzureAuthorizationHandler : DelegatingHandler
     {
+        private static readonly TokenCache AppTokenCache = new TokenCache();
+
         private readonly IConfidentialClientApplication _clientApplication;
 
         public AzureAuthorizationHandler(AzureADAuthOptions azureADAuthOptions)
@@ -16,10 +18,10 @@ namespace azure.Auth
             _clientApplication = new ConfidentialClientApplication(
                 azureADAuthOptions.ClientId,
                 $"{azureADAuthOptions.Instance}{azureADAuthOptions.TenantId}",
-                azureADAuthOptions.RedirectUri,
+                "http://www.nu.nl",
                 new ClientCredential(azureADAuthOptions.ClientSecret),
                 null,
-                new TokenCache());
+                AppTokenCache);
         }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)

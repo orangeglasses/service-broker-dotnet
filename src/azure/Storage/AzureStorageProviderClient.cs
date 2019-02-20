@@ -1,10 +1,12 @@
-﻿using System.IO;
+﻿using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using azure.resources;
+using azure.Storage.Model;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 
@@ -14,12 +16,9 @@ namespace azure.Storage
     {
         public const string DefaultApiVersion = "2018-07-01";
 
-        private readonly HttpClient _client;
-
         public AzureStorageProviderClient(HttpClient client, ILogger<AzureStorageProviderClient> log)
-            : base(log)
+            : base(client, log)
         {
-            _client = client;
         }
 
         public async Task<bool> IsNameAvailable(string storageAccountName, string apiVersion = DefaultApiVersion, CancellationToken ct = default)
@@ -27,7 +26,7 @@ namespace azure.Storage
             var body = new StorageAccountNameAvailabilityRequestBody(storageAccountName);
             var serializedBody = JsonConvert.SerializeObject(body, Formatting.None, JsonSerializerSettings);
 
-            var response = await _client.PostAsync(
+            var response = await Client.PostAsync(
                 $"checkNameAvailability?api-version={apiVersion}",
                 new StringContent(serializedBody, Encoding.UTF8, "application/json"),
                 ct);
@@ -44,7 +43,7 @@ namespace azure.Storage
 
                         if (responseBody.NameAvailable)
                         {
-                            Log.LogDebug($"Storage account name {storageAccountName} is available.");
+                            Log.LogDebug($"Storage account name {storageAccountName} is available");
                             return true;
                         }
 
@@ -58,7 +57,7 @@ namespace azure.Storage
                         if (!responseBody.NameAvailable &&
                             responseBody.Reason == StorageAccountNameAvailabilityResponseBody.ReasonAccountNameInvalid)
                         {
-                            Log.LogError($"Invalid storage account name {storageAccountName} provided: {responseBody.Message}.");
+                            Log.LogError($"Invalid storage account name {storageAccountName} provided: {responseBody.Message}");
                             return false;
                         }
 
@@ -74,6 +73,32 @@ namespace azure.Storage
                 var errorContent = await response.Content.ReadAsStringAsync();
                 throw new AzureResourceException("Unexpected status code", response.StatusCode, errorContent);
             }
+        }
+
+        public async Task<IEnumerable<StorageAccount>> ListStorageAccounts(string apiVersion = DefaultApiVersion, CancellationToken ct = default)
+        {
+            var response = await Client.GetAsync($"storageAccounts?api-version={apiVersion}", ct);
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                using (var responseStream = await response.Content.ReadAsStreamAsync())
+                using (var streamReader = new StreamReader(responseStream))
+                using (var jsonTextReader = new JsonTextReader(streamReader))
+                {
+                    var storageAccountListResult =
+                        JsonSerializer.Deserialize<StorageAccountListResult>(jsonTextReader);
+                    return storageAccountListResult.StorageAccounts;
+                }
+            }
+
+            var errorContent = await response.Content.ReadAsStringAsync();
+            throw new AzureResourceException("Unexpected error code", response.StatusCode, errorContent);
+        }
+
+        [JsonObject]
+        private class StorageAccountListResult
+        {
+            [JsonProperty("value")]
+            public StorageAccount[] StorageAccounts { get; set; }
         }
 
         [JsonObject]

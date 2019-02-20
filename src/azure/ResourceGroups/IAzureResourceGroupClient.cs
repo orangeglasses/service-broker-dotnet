@@ -9,5 +9,7 @@ namespace azure.ResourceGroups
         Task<bool> ResourceGroupExists(string name, string apiVersion = AzureResourceGroupClient.DefaultApiVersion, CancellationToken ct = default);
 
         Task<ResourceGroup> CreateResourceGroup(ResourceGroup resourceGroup, string apiVersion = AzureResourceGroupClient.DefaultApiVersion, CancellationToken ct = default);
+
+        Task DeleteResourceGroupIfEmpty(string name, string apiVersion = AzureResourceGroupClient.DefaultApiVersion, CancellationToken ct = default);
     }
 }

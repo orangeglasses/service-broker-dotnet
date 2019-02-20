@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using azure.ResourceGroups;
 using azure.ResourceGroups.Model;
@@ -41,11 +42,11 @@ namespace broker.Lib
             // Create resource group if it does not yet exist.
             if (exists)
             {
-                _log.LogInformation($"Resource group {resourceGroupName} exists.");
+                _log.LogInformation($"Resource group {resourceGroupName} exists");
             }
             else
             {
-                _log.LogInformation($"Resource group {resourceGroupName} does not exist: creating.");
+                _log.LogInformation($"Resource group {resourceGroupName} does not exist: creating");
 
                 var resourceGroup = await _azureResourceGroupClient.CreateResourceGroup(new ResourceGroup
                 {
@@ -57,7 +58,7 @@ namespace broker.Lib
                         { "cf_space_id", spaceId }
                     }
                 });
-                _log.LogInformation($"Resource group {resourceGroupName} created: {resourceGroup.Id}.");
+                _log.LogInformation($"Resource group {resourceGroupName} created: {resourceGroup.Id}");
             }
 
             // Create storage account.
@@ -101,14 +102,28 @@ namespace broker.Lib
             return new ServiceInstanceProvision();
         }
 
-        public Task DeprovisionAsync(ServiceInstanceContext context, string serviceId, string planId)
+        public async Task DeprovisionAsync(ServiceInstanceContext context, string serviceId, string planId)
         {
             LogContext(_log, "Deprovision", context);
             _log.LogInformation($"Deprovision: {{ service_id = {serviceId}, planId = {planId} }}");
 
+            // First retrieve all storage accounts in the subscription because we do not have information here
+            // about the resource group of the storage account we wish to delete.
+            var storageAccounts = await _azureStorageProviderClient.ListStorageAccounts();
 
+            // Find storage account with the tag containing the service instance id.
+            var storageAccount = storageAccounts
+                .SingleOrDefault(account => account.Tags
+                    .Any(tag => tag.Key == "cf_service_instance_id" && tag.Value == context.InstanceId));
+            if (storageAccount != null)
+            {
+                // Delete storage account based on storage account resource id.
+                await _azureStorageClient.DeleteStorageAccount(storageAccount.Id);
 
-            return Task.CompletedTask;
+                // Parse resource group name from resource id.
+                var resourceGroupName = storageAccount.Id.Split('/')[4];
+                await _azureResourceGroupClient.DeleteResourceGroupIfEmpty(resourceGroupName);
+            }
         }
 
         public Task<ServiceInstanceResource> FetchAsync(string instanceId)

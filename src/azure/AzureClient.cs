@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Net.Http;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
@@ -21,10 +22,13 @@ namespace azure
             Converters = { new StringEnumConverter() }
         };
 
+        protected HttpClient Client { get; }
+
         protected ILogger Log { get; }
 
-        protected AzureClient(ILogger log)
+        protected AzureClient(HttpClient client, ILogger log)
         {
+            Client = client;
             Log = log;
         }
     }

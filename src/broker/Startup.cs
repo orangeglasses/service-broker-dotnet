@@ -1,6 +1,6 @@
 ﻿using System.Security.Claims;
 using System.Threading.Tasks;
-using azure.resources;
+using azure;
 using broker.Lib;
 using idunno.Authentication.Basic;
 using Microsoft.AspNetCore.Builder;

@@ -1,15 +1,11 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Text;
 using azure.Auth;
 using azure.Config;
 using azure.ResourceGroups;
 using azure.Storage;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 
-namespace azure.resources
+namespace azure
 {
     public static class ServiceCollectionExtensions
     {

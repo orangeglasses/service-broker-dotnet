@@ -37,9 +37,9 @@ namespace broker.Lib
             var orgId = request.OrganizationGuid;
             var spaceId = request.SpaceGuid;
             var resourceGroupName = $"{orgId}_{spaceId}";
-            var exists = await _azureResourceGroupClient.ResourceGroupExists(resourceGroupName);
 
             // Create resource group if it does not yet exist.
+            var exists = await _azureResourceGroupClient.ResourceGroupExists(resourceGroupName);
             if (exists)
             {
                 _log.LogInformation($"Resource group {resourceGroupName} exists");
@@ -120,7 +120,7 @@ namespace broker.Lib
                 // Delete storage account based on storage account resource id.
                 await _azureStorageClient.DeleteStorageAccount(storageAccount.Id);
 
-                // Parse resource group name from resource id.
+                // Parse resource group name from resource id and delete resource group if empty.
                 var resourceGroupName = storageAccount.Id.Split('/')[4];
                 await _azureResourceGroupClient.DeleteResourceGroupIfEmpty(resourceGroupName);
             }

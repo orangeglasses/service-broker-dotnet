@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
 using azure.Config;
+using Microsoft.Extensions.Options;
 using Microsoft.Identity.Client;
 
 namespace azure.Auth
@@ -13,13 +14,14 @@ namespace azure.Auth
 
         private readonly IConfidentialClientApplication _clientApplication;
 
-        public AzureAuthorizationHandler(AzureADAuthOptions azureADAuthOptions)
+        public AzureAuthorizationHandler(IOptions<AzureRMAuthOptions> azureRMAuthOptions)
         {
+            var azureRMAuth = azureRMAuthOptions.Value;
             _clientApplication = new ConfidentialClientApplication(
-                azureADAuthOptions.ClientId,
-                $"{azureADAuthOptions.Instance}{azureADAuthOptions.TenantId}",
-                "http://www.nu.nl",
-                new ClientCredential(azureADAuthOptions.ClientSecret),
+                azureRMAuth.ClientId,
+                $"{azureRMAuth.Instance}{azureRMAuth.TenantId}",
+                $"https://{azureRMAuth.ClientId}",
+                new ClientCredential(azureRMAuth.ClientSecret),
                 null,
                 AppTokenCache);
         }

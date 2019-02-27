@@ -119,37 +119,6 @@ namespace broker
             app.UseMvc();
         }
 
-        private Action<AzureRMAuthOptions> ConfigureAzureRMAuth(IServiceCollection services, IHostingEnvironment env)
-        {
-            if (env.IsDevelopment())
-            {
-                return options => Configuration.Bind("AzureRMAuth", options);
-            }
-
-            return options =>
-            {
-                // Get CF services (VCAP_SERVICES) and azure-rm-auth service.
-                var serviceProvider = services.BuildServiceProvider();
-                var cfServicesOptions = serviceProvider.GetRequiredService<IOptions<CloudFoundryServicesOptions>>();
-                var cfServices = cfServicesOptions.Value;
-                var userScopedServices = cfServices.Services["user-provided"];
-                var azureRMAuthService = userScopedServices.Single(service => service.Name == "azure-rm-auth");
-
-                // Get credentials for azure-rm-auth service.
-                var credentials = azureRMAuthService.Credentials;
-                var clientId = credentials["ClientId"].Value;
-                var clientSecret = credentials["ClientSecret"].Value;
-                var instance = credentials["Instance"].Value;
-                var tenantId = credentials["TenantId"].Value;
-
-                // Configure options.
-                options.ClientId = clientId;
-                options.ClientSecret = clientSecret;
-                options.Instance = instance;
-                options.TenantId = tenantId;
-            };
-        }
-
         private Action<AzureOptions> ConfigureAzure(IServiceCollection services, IHostingEnvironment env)
         {
             if (env.IsDevelopment())
@@ -168,10 +137,36 @@ namespace broker
 
                 // Get credentials for azure service.
                 var credentials = azureRMAuthService.Credentials;
-                var subscriptionId = credentials["SubscriptionId"].Value;
 
                 // Configure options.
-                options.SubscriptionId = subscriptionId;
+                options.SubscriptionId = credentials["SubscriptionId"].Value;
+            };
+        }
+
+        private Action<AzureRMAuthOptions> ConfigureAzureRMAuth(IServiceCollection services, IHostingEnvironment env)
+        {
+            if (env.IsDevelopment())
+            {
+                return options => Configuration.Bind("AzureRMAuth", options);
+            }
+
+            return options =>
+            {
+                // Get CF services (VCAP_SERVICES) and azure-rm-auth service.
+                var serviceProvider = services.BuildServiceProvider();
+                var cfServicesOptions = serviceProvider.GetRequiredService<IOptions<CloudFoundryServicesOptions>>();
+                var cfServices = cfServicesOptions.Value;
+                var userScopedServices = cfServices.Services["user-provided"];
+                var azureRMAuthService = userScopedServices.Single(service => service.Name == "azure-rm-auth");
+
+                // Get credentials for azure-rm-auth service.
+                var credentials = azureRMAuthService.Credentials;
+
+                // Configure options.
+                options.ClientId = credentials["ClientId"].Value;
+                options.ClientSecret = credentials["ClientSecret"].Value;
+                options.Instance = credentials["Instance"].Value;
+                options.TenantId = credentials["TenantId"].Value;
             };
         }
     }

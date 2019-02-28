@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Net;
 
-namespace azure.resources
+namespace azure
 {
     public class AzureResourceException : Exception
     {

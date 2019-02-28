@@ -1,6 +1,9 @@
-﻿using System.Security.Claims;
+﻿using System;
+using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
-using azure.resources;
+using azure;
+using azure.Config;
 using broker.Lib;
 using idunno.Authentication.Basic;
 using Microsoft.AspNetCore.Builder;
@@ -9,17 +12,22 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using OpenServiceBroker;
 using OpenServiceBroker.Bindings;
 using OpenServiceBroker.Catalogs;
 using OpenServiceBroker.Instances;
+using Steeltoe.Extensions.Configuration.CloudFoundry;
 
 namespace broker
 {
     public class Startup
     {
-        public Startup(IConfiguration configuration)
+        private readonly IHostingEnvironment _env;
+
+        public Startup(IConfiguration configuration, IHostingEnvironment env)
         {
+            _env = env;
             Configuration = configuration;
         }
 
@@ -28,6 +36,8 @@ namespace broker
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddOptions();
+
             services
                 .AddMvc(options =>
                 {
@@ -81,9 +91,13 @@ namespace broker
                     };
                 });
 
+            // Add Cloud Foundry options.
+            services.ConfigureCloudFoundryOptions(Configuration);
+
+            // Add Azure REST API services.
             services.AddAzureServices(
-                options => Configuration.Bind("Azure", options),
-                options => Configuration.Bind("AzureADAuth", options));
+                ConfigureAzure(services, _env),
+                ConfigureAzureRMAuth(services, _env));
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -103,6 +117,57 @@ namespace broker
 
             app.UseHttpsRedirection();
             app.UseMvc();
+        }
+
+        private Action<AzureOptions> ConfigureAzure(IServiceCollection services, IHostingEnvironment env)
+        {
+            if (env.IsDevelopment())
+            {
+                return options => Configuration.Bind("Azure", options);
+            }
+
+            return options =>
+            {
+                // Get CF services (VCAP_SERVICES) and azure service.
+                var serviceProvider = services.BuildServiceProvider();
+                var cfServicesOptions = serviceProvider.GetRequiredService<IOptions<CloudFoundryServicesOptions>>();
+                var cfServices = cfServicesOptions.Value;
+                var userScopedServices = cfServices.Services["user-provided"];
+                var azureRMAuthService = userScopedServices.Single(service => service.Name == "azure");
+
+                // Get credentials for azure service.
+                var credentials = azureRMAuthService.Credentials;
+
+                // Configure options.
+                options.SubscriptionId = credentials["SubscriptionId"].Value;
+            };
+        }
+
+        private Action<AzureRMAuthOptions> ConfigureAzureRMAuth(IServiceCollection services, IHostingEnvironment env)
+        {
+            if (env.IsDevelopment())
+            {
+                return options => Configuration.Bind("AzureRMAuth", options);
+            }
+
+            return options =>
+            {
+                // Get CF services (VCAP_SERVICES) and azure-rm-auth service.
+                var serviceProvider = services.BuildServiceProvider();
+                var cfServicesOptions = serviceProvider.GetRequiredService<IOptions<CloudFoundryServicesOptions>>();
+                var cfServices = cfServicesOptions.Value;
+                var userScopedServices = cfServices.Services["user-provided"];
+                var azureRMAuthService = userScopedServices.Single(service => service.Name == "azure-rm-auth");
+
+                // Get credentials for azure-rm-auth service.
+                var credentials = azureRMAuthService.Credentials;
+
+                // Configure options.
+                options.ClientId = credentials["ClientId"].Value;
+                options.ClientSecret = credentials["ClientSecret"].Value;
+                options.Instance = credentials["Instance"].Value;
+                options.TenantId = credentials["TenantId"].Value;
+            };
         }
     }
 }

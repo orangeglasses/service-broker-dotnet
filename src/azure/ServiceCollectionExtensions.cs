@@ -1,7 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Text;
 using azure.Auth;
 using azure.Config;
 using azure.ResourceGroups;
@@ -9,34 +6,30 @@ using azure.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
-namespace azure.resources
+namespace azure
 {
     public static class ServiceCollectionExtensions
     {
         public static IServiceCollection AddAzureServices(
             this IServiceCollection services,
             Action<AzureOptions> configureAzureOptions,
-            Action<AzureADAuthOptions> configureAzureADAuthOptions)
+            Action<AzureRMAuthOptions> configureAzureRMAuthOptions)
         {
-            // Configure Azure options.
-            var azureOptions = new AzureOptions();
-            configureAzureOptions(azureOptions);
+            if (services == null) throw new ArgumentNullException(nameof(services));
+            if (configureAzureOptions == null) throw new ArgumentNullException(nameof(configureAzureOptions));
+            if (configureAzureRMAuthOptions == null) throw new ArgumentNullException(nameof(configureAzureRMAuthOptions));
 
-            // Configure Azure AD authorization options.
-            var azureADAuthOptions = new AzureADAuthOptions();
-            configureAzureADAuthOptions(azureADAuthOptions);
-
-            // Register configuration settings.
-            services
-                .AddSingleton(azureOptions)
-                .AddSingleton(azureADAuthOptions);
+            // Configure Azure and Azure RM options.
+            services.Configure(configureAzureOptions);
+            services.Configure(configureAzureRMAuthOptions);
 
             // Add Azure services.
             services.AddTransient<AzureAuthorizationHandler>();
             services
                 .AddHttpClient<IAzureResourceGroupClient, AzureResourceGroupClient>((serviceProvider, client) =>
                 {
-                    var azureConfig = serviceProvider.GetRequiredService<AzureOptions>();
+                    var azureOptions = serviceProvider.GetRequiredService<IOptions<AzureOptions>>();
+                    var azureConfig = azureOptions.Value;
                     client.BaseAddress =
                         new Uri($"https://management.azure.com/subscriptions/{azureConfig.SubscriptionId}/resourcegroups/");
                 })
@@ -45,7 +38,8 @@ namespace azure.resources
             services
                 .AddHttpClient<IAzureStorageProviderClient, AzureStorageProviderClient>((serviceProvider, client) =>
                 {
-                    var azureConfig = serviceProvider.GetRequiredService<AzureOptions>();
+                    var azureOptions = serviceProvider.GetRequiredService<IOptions<AzureOptions>>();
+                    var azureConfig = azureOptions.Value;
                     client.BaseAddress =
                         new Uri($"https://management.azure.com/subscriptions/{azureConfig.SubscriptionId}/providers/Microsoft.Storage/");
                 })
@@ -54,7 +48,8 @@ namespace azure.resources
             services
                 .AddHttpClient<IAzureStorageClient, AzureStorageClient>((serviceProvider, client) =>
                 {
-                    var azureConfig = serviceProvider.GetRequiredService<AzureOptions>();
+                    var azureOptions = serviceProvider.GetRequiredService<IOptions<AzureOptions>>();
+                    var azureConfig = azureOptions.Value;
                     client.BaseAddress =
                         new Uri($"https://management.azure.com/subscriptions/{azureConfig.SubscriptionId}/resourceGroups/");
                 })

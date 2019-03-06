@@ -1,12 +1,12 @@
 ﻿using System;
 using System.Net;
 
-namespace azure
+namespace azure.Errors
 {
     public class AzureResourceException : Exception
     {
         public HttpStatusCode StatusCode { get; }
-        public string ErrorContent { get; }
+        public Error Error { get; }
 
         public AzureResourceException(string message, HttpStatusCode statusCode)
             : base(message)
@@ -14,10 +14,10 @@ namespace azure
             StatusCode = statusCode;
         }
 
-        public AzureResourceException(string message, HttpStatusCode statusCode, string errorContent)
+        public AzureResourceException(string message, HttpStatusCode statusCode, Error error)
             : this(message, statusCode)
         {
-            ErrorContent = errorContent;
+            Error = error;
         }
     }
 }

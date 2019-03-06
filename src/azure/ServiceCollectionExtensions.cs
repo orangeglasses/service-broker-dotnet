@@ -1,6 +1,7 @@
 ﻿using System;
 using azure.Auth;
 using azure.Config;
+using azure.Graph;
 using azure.ResourceGroups;
 using azure.Storage;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,47 +14,47 @@ namespace azure
         public static IServiceCollection AddAzureServices(
             this IServiceCollection services,
             Action<AzureOptions> configureAzureOptions,
-            Action<AzureRMAuthOptions> configureAzureRMAuthOptions)
+            Action<AzureAuthOptions> configureAzureAuthOptions)
         {
             if (services == null) throw new ArgumentNullException(nameof(services));
             if (configureAzureOptions == null) throw new ArgumentNullException(nameof(configureAzureOptions));
-            if (configureAzureRMAuthOptions == null) throw new ArgumentNullException(nameof(configureAzureRMAuthOptions));
+            if (configureAzureAuthOptions == null) throw new ArgumentNullException(nameof(configureAzureAuthOptions));
 
             // Configure Azure and Azure RM options.
             services.Configure(configureAzureOptions);
-            services.Configure(configureAzureRMAuthOptions);
+            services.Configure(configureAzureAuthOptions);
 
-            // Add Azure services.
-            services.AddTransient<AzureAuthorizationHandler>();
+            // Add Azure RM services.
+            services.AddTransient<AzureRMAuthorizationHandler>();
             services
                 .AddHttpClient<IAzureResourceGroupClient, AzureResourceGroupClient>((serviceProvider, client) =>
                 {
-                    var azureOptions = serviceProvider.GetRequiredService<IOptions<AzureOptions>>();
-                    var azureConfig = azureOptions.Value;
-                    client.BaseAddress =
-                        new Uri($"https://management.azure.com/subscriptions/{azureConfig.SubscriptionId}/resourcegroups/");
+                    client.BaseAddress = new Uri($"https://management.azure.com");
                 })
-                .AddHttpMessageHandler<AzureAuthorizationHandler>();
+                .AddHttpMessageHandler<AzureRMAuthorizationHandler>();
 
             services
                 .AddHttpClient<IAzureStorageProviderClient, AzureStorageProviderClient>((serviceProvider, client) =>
                 {
-                    var azureOptions = serviceProvider.GetRequiredService<IOptions<AzureOptions>>();
-                    var azureConfig = azureOptions.Value;
-                    client.BaseAddress =
-                        new Uri($"https://management.azure.com/subscriptions/{azureConfig.SubscriptionId}/providers/Microsoft.Storage/");
+                    client.BaseAddress = new Uri($"https://management.azure.com");
                 })
-                .AddHttpMessageHandler<AzureAuthorizationHandler>();
+                .AddHttpMessageHandler<AzureRMAuthorizationHandler>();
 
             services
                 .AddHttpClient<IAzureStorageClient, AzureStorageClient>((serviceProvider, client) =>
                 {
-                    var azureOptions = serviceProvider.GetRequiredService<IOptions<AzureOptions>>();
-                    var azureConfig = azureOptions.Value;
-                    client.BaseAddress =
-                        new Uri($"https://management.azure.com/subscriptions/{azureConfig.SubscriptionId}/resourceGroups/");
+                    client.BaseAddress = new Uri($"https://management.azure.com");
                 })
-                .AddHttpMessageHandler<AzureAuthorizationHandler>();
+                .AddHttpMessageHandler<AzureRMAuthorizationHandler>();
+
+            // Add Microsoft Graph services.
+            services.AddTransient<MSGraphAuthorizationHandler>();
+            services
+                .AddHttpClient<IMSGraphClient, MSGraphClient>(client =>
+                {
+                    client.BaseAddress = new Uri("https://graph.microsoft.com/beta/");
+                })
+                .AddHttpMessageHandler<MSGraphAuthorizationHandler>();
 
             return services;
         }

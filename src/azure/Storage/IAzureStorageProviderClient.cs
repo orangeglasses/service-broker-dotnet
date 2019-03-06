@@ -12,5 +12,8 @@ namespace azure.Storage
 
         Task<IEnumerable<StorageAccount>> ListStorageAccounts(
             string apiVersion = AzureStorageProviderClient.DefaultApiVersion, CancellationToken ct = default);
+
+        Task<IEnumerable<StorageAccount>> GetStorageAccountsByTag(
+            string tagName, string tagValue, string apiVersion = AzureStorageProviderClient.DefaultApiVersion, CancellationToken ct = default);
     }
 }

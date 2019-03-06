@@ -8,7 +8,7 @@ using azure.Storage.Model;
 using Microsoft.Extensions.Logging;
 using OpenServiceBroker.Instances;
 
-namespace broker.Lib
+namespace broker.Instances
 {
     public class ServiceInstanceBlocking : IServiceInstanceBlocking
     {
@@ -95,6 +95,8 @@ namespace broker.Lib
                     {
                         { "cf_org_id", orgId },
                         { "cf_space_id", spaceId },
+                        { "cf_service_id", request.ServiceId },
+                        { "cf_plan_id", request.PlanId },
                         { "cf_service_instance_id", context.InstanceId }
                     }
                 });

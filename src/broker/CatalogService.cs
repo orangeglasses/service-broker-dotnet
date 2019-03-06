@@ -2,7 +2,7 @@ using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using OpenServiceBroker.Catalogs;
 
-namespace broker.Lib
+namespace broker
 {
     public class CatalogService : ICatalogService
     {

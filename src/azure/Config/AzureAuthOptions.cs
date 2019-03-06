@@ -1,6 +1,6 @@
 ﻿namespace azure.Config
 {
-    public class AzureRMAuthOptions
+    public class AzureAuthOptions
     {
         public string Instance { get; set; }
         public string TenantId { get; set; }

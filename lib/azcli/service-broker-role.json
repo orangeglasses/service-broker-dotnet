@@ -12,7 +12,9 @@
       "Microsoft.Storage/storageAccounts/delete",
       "Microsoft.Storage/storageAccounts/read",
       "Microsoft.Storage/storageAccounts/write",
-      "Microsoft.Storage/checknameavailability/read"
+      "Microsoft.Storage/checknameavailability/read",
+
+      "Microsoft.Authorization/roleAssignments/write"
     ],
     "NotActions": [
     ],

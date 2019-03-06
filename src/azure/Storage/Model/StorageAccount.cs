@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
 
 namespace azure.Storage.Model
 {
@@ -8,7 +7,7 @@ namespace azure.Storage.Model
     public class StorageAccount
     {
         [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
-        public string Id { get; internal set; }
+        public string Id { get; private set; }
 
         [JsonProperty]
         public string Name { get; set; }

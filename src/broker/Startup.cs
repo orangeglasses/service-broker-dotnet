@@ -4,7 +4,8 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using azure;
 using azure.Config;
-using broker.Lib;
+using broker.Bindings;
+using broker.Instances;
 using idunno.Authentication.Basic;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -97,7 +98,7 @@ namespace broker
             // Add Azure REST API services.
             services.AddAzureServices(
                 ConfigureAzure(services, _env),
-                ConfigureAzureRMAuth(services, _env));
+                ConfigureAzureAuth(services, _env));
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -133,34 +134,34 @@ namespace broker
                 var cfServicesOptions = serviceProvider.GetRequiredService<IOptions<CloudFoundryServicesOptions>>();
                 var cfServices = cfServicesOptions.Value;
                 var userScopedServices = cfServices.Services["user-provided"];
-                var azureRMAuthService = userScopedServices.Single(service => service.Name == "azure");
+                var azureService = userScopedServices.Single(service => service.Name == "azure");
 
                 // Get credentials for azure service.
-                var credentials = azureRMAuthService.Credentials;
+                var credentials = azureService.Credentials;
 
                 // Configure options.
                 options.SubscriptionId = credentials["SubscriptionId"].Value;
             };
         }
 
-        private Action<AzureRMAuthOptions> ConfigureAzureRMAuth(IServiceCollection services, IHostingEnvironment env)
+        private Action<AzureAuthOptions> ConfigureAzureAuth(IServiceCollection services, IHostingEnvironment env)
         {
             if (env.IsDevelopment())
             {
-                return options => Configuration.Bind("AzureRMAuth", options);
+                return options => Configuration.Bind("AzureAuth", options);
             }
 
             return options =>
             {
-                // Get CF services (VCAP_SERVICES) and azure-rm-auth service.
+                // Get CF services (VCAP_SERVICES) and azure-auth service.
                 var serviceProvider = services.BuildServiceProvider();
                 var cfServicesOptions = serviceProvider.GetRequiredService<IOptions<CloudFoundryServicesOptions>>();
                 var cfServices = cfServicesOptions.Value;
                 var userScopedServices = cfServices.Services["user-provided"];
-                var azureRMAuthService = userScopedServices.Single(service => service.Name == "azure-rm-auth");
+                var azureAuthService = userScopedServices.Single(service => service.Name == "azure-auth");
 
-                // Get credentials for azure-rm-auth service.
-                var credentials = azureRMAuthService.Credentials;
+                // Get credentials for azure-auth service.
+                var credentials = azureAuthService.Credentials;
 
                 // Configure options.
                 options.ClientId = credentials["ClientId"].Value;

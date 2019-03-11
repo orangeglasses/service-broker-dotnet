@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using azure.Config;
 using azure.Errors;
+using azure.Lib;
 using azure.Storage.Model;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -22,8 +23,9 @@ namespace azure.Storage
 
         private readonly AzureOptions _azureOptions;
 
-        public AzureStorageProviderClient(HttpClient client, IOptions<AzureOptions> azureOptions, ILogger<AzureStorageProviderClient> log)
-            : base(client, log)
+        public AzureStorageProviderClient(
+            HttpClient client, IHttp http, IJson json, IOptions<AzureOptions> azureOptions, ILogger<AzureStorageProviderClient> log)
+            : base(client, http, json, log)
         {
             _azureOptions = azureOptions.Value;
         }
@@ -31,55 +33,57 @@ namespace azure.Storage
         public async Task<bool> IsNameAvailable(string storageAccountName, string apiVersion = DefaultApiVersion, CancellationToken ct = default)
         {
             var body = new StorageAccountNameAvailabilityRequestBody(storageAccountName);
-            var serializedBody = JsonConvert.SerializeObject(body, Formatting.None, JsonSerializerSettings);
+            var serializedBody = JsonConvert.SerializeObject(body, Formatting.None, Json.JsonSerializerSettings);
 
             var requestUri = $"/subscriptions/{_azureOptions.SubscriptionId}/providers/Microsoft.Storage/checkNameAvailability?api-version={apiVersion}";
-            var response = await Client.PostAsync(
-                requestUri,
-                new StringContent(serializedBody, Encoding.UTF8, "application/json"),
-                ct);
-            using (response)
+            var request = new HttpRequestMessage(HttpMethod.Post, requestUri)
             {
-                using (var responseStream = await response.Content.ReadAsStreamAsync())
-                using (var streamReader = new StreamReader(responseStream))
-                using (var jsonTextReader = new JsonTextReader(streamReader))
-                {
-                    if (response.StatusCode == HttpStatusCode.OK)
+                Content = new StringContent(serializedBody, Encoding.UTF8, "application/json")
+            };
+            using (request)
+            {
+                return await Http.SendRequestAndDecodeResponse(
+                    Client,
+                    request,
+                    (statusCode, jsonTextReader) =>
                     {
-                        var responseBody =
-                            JsonSerializer.Deserialize<StorageAccountNameAvailabilityResponseBody>(jsonTextReader);
-
-                        if (responseBody.NameAvailable)
+                        if (statusCode == HttpStatusCode.OK)
                         {
-                            Log.LogDebug($"Storage account name {storageAccountName} is available");
-                            return true;
+                            var responseBody =
+                                Json.Deserialize<StorageAccountNameAvailabilityResponseBody>(jsonTextReader);
+
+                            if (responseBody.NameAvailable)
+                            {
+                                Log.LogDebug($"Storage account name {storageAccountName} is available");
+                                return true;
+                            }
+
+                            if (!responseBody.NameAvailable &&
+                                responseBody.Reason == StorageAccountNameAvailabilityResponseBody.ReasonAlreadyExists)
+                            {
+                                Log.LogWarning($"Storage account name {storageAccountName} is not available.");
+                                return false;
+                            }
+
+                            if (!responseBody.NameAvailable &&
+                                responseBody.Reason == StorageAccountNameAvailabilityResponseBody.ReasonAccountNameInvalid)
+                            {
+                                Log.LogError($"Invalid storage account name {storageAccountName} provided: {responseBody.Message}");
+                                return false;
+                            }
+
+                            throw new AzureResourceException(
+                                "Unexpected OK response in storage account name availability check: " +
+                                $"nameAvailable = {responseBody.NameAvailable}, " +
+                                $"reason = {responseBody.Reason}, " +
+                                $"message = {responseBody.Message}",
+                                statusCode);
                         }
 
-                        if (!responseBody.NameAvailable &&
-                            responseBody.Reason == StorageAccountNameAvailabilityResponseBody.ReasonAlreadyExists)
-                        {
-                            Log.LogWarning($"Storage account name {storageAccountName} is not available.");
-                            return false;
-                        }
-
-                        if (!responseBody.NameAvailable &&
-                            responseBody.Reason == StorageAccountNameAvailabilityResponseBody.ReasonAccountNameInvalid)
-                        {
-                            Log.LogError($"Invalid storage account name {storageAccountName} provided: {responseBody.Message}");
-                            return false;
-                        }
-
-                        throw new AzureResourceException(
-                             "Unexpected OK response in storage account name availability check: " +
-                            $"nameAvailable = {responseBody.NameAvailable}, " +
-                            $"reason = {responseBody.Reason}, " +
-                            $"message = {responseBody.Message}",
-                            response.StatusCode);
-                    }
-
-                    var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(jsonTextReader);
-                    throw new AzureResourceException("Unexpected status code", response.StatusCode, errorResponse.Error);
-                }
+                        var errorResponse = Json.Deserialize<ErrorResponse>(jsonTextReader);
+                        throw new AzureResourceException("Unexpected status code", statusCode, errorResponse.Error);
+                    },
+                    ct);
             }
         }
 
@@ -102,22 +106,25 @@ namespace azure.Storage
         private async Task<IEnumerable<StorageAccount>> InternalListStorageAccounts(string apiVersion, CancellationToken ct)
         {
             var requestUri = $"/subscriptions/{_azureOptions.SubscriptionId}/providers/Microsoft.Storage/storageAccounts?api-version={apiVersion}";
-            using (var response = await Client.GetAsync(requestUri, ct))
+            using (var request = new HttpRequestMessage(HttpMethod.Get, requestUri))
             {
-                using (var responseStream = await response.Content.ReadAsStreamAsync())
-                using (var streamReader = new StreamReader(responseStream))
-                using (var jsonTextReader = new JsonTextReader(streamReader))
-                {
-                    if (response.StatusCode == HttpStatusCode.OK)
+                return await Http.SendRequestAndDecodeResponse(
+                    Client,
+                    request,
+                    (statusCode, jsonTextReader) =>
                     {
-                        var storageAccountListResult =
-                            JsonSerializer.Deserialize<StorageAccountListResult>(jsonTextReader);
-                        return storageAccountListResult.StorageAccounts;
-                    }
+                        if (statusCode == HttpStatusCode.OK)
+                        {
+                            var storageAccountListResult =
+                                Json.Deserialize<StorageAccountListResult>(jsonTextReader);
+                            return storageAccountListResult.StorageAccounts;
+                        }
 
-                    var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(jsonTextReader);
-                    throw new AzureResourceException("Unexpected error code", response.StatusCode, errorResponse.Error);
-                }
+                        var errorResponse = Json.Deserialize<ErrorResponse>(jsonTextReader);
+                        throw new AzureResourceException("Unexpected error storage accounts list", statusCode,
+                            errorResponse.Error);
+                    },
+                    ct);
             }
         }
 

@@ -2,10 +2,10 @@
 using azure.Auth;
 using azure.Config;
 using azure.Graph;
+using azure.Lib;
 using azure.ResourceGroups;
 using azure.Storage;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 
 namespace azure
 {
@@ -23,6 +23,10 @@ namespace azure
             // Configure Azure and Azure RM options.
             services.Configure(configureAzureOptions);
             services.Configure(configureAzureAuthOptions);
+
+            // Add http services.
+            services.AddSingleton<IJson, Json>();
+            services.AddSingleton<IHttp, Http>();
 
             // Add Azure RM services.
             services.AddTransient<AzureRMAuthorizationHandler>();

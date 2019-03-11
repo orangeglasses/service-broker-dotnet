@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -9,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using azure.Config;
 using azure.Errors;
+using azure.Lib;
 using azure.RoleAssignments.Model;
 using azure.Storage.Model;
 using Microsoft.Extensions.Logging;
@@ -25,8 +25,8 @@ namespace azure.Storage
 
         private readonly AzureOptions _azureOptions;
 
-        public AzureStorageClient(HttpClient client, IOptions<AzureOptions> azureOptions, ILogger<AzureStorageClient> log)
-            : base(client, log)
+        public AzureStorageClient(HttpClient client, IHttp http, IJson json, IOptions<AzureOptions> azureOptions, ILogger<AzureStorageClient> log)
+            : base(client, http, json, log)
         {
             _azureOptions = azureOptions.Value;
         }
@@ -36,47 +36,50 @@ namespace azure.Storage
             CancellationToken ct = default)
         {
             var serializedStorageAccount =
-                JsonConvert.SerializeObject(storageAccount, Formatting.None, JsonSerializerSettings);
+                JsonConvert.SerializeObject(storageAccount, Formatting.None, Json.JsonSerializerSettings);
 
+            StorageAccount createdStorageAccount;
             do
             {
                 var requestUri =
-                    $"/subscriptions/{_azureOptions.SubscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Storage/storageAccounts/{storageAccount.Name}?api-version={apiVersion}";
-                var response = await Client.PutAsync(
-                    requestUri,
-                    new StringContent(serializedStorageAccount, Encoding.UTF8, "application/json"),
-                    ct);
-
-                using (response)
+                    $"/subscriptions/{_azureOptions.SubscriptionId}" +
+                    $"/resourceGroups/{resourceGroupName}" +
+                    $"/providers/Microsoft.Storage/storageAccounts/{storageAccount.Name}?api-version={apiVersion}";
+                var request = new HttpRequestMessage(HttpMethod.Put, requestUri)
                 {
-                    Log.LogInformation(
-                        $"Storage account {storageAccount.Name} created from previous request with same properties");
+                    Content = new StringContent(serializedStorageAccount, Encoding.UTF8, "application/json")
+                };
 
-                    using (var responseStream = await response.Content.ReadAsStreamAsync())
-                    using (var streamReader = new StreamReader(responseStream))
-                    using (var jsonTextReader = new JsonTextReader(streamReader))
-                    {
-                        if (response.StatusCode == HttpStatusCode.OK)
+                using (request)
+                {
+                    createdStorageAccount = await Http.SendRequestAndDecodeResponse(
+                        Client,
+                        request,
+                        (statusCode, jsonTextReader) =>
                         {
-                            var createdStorageAccount = JsonSerializer.Deserialize<StorageAccount>(jsonTextReader);
-                            return createdStorageAccount;
-                        }
+                            if (statusCode == HttpStatusCode.OK)
+                            {
+                                return Json.Deserialize<StorageAccount>(jsonTextReader);
+                            }
 
-                        if (response.StatusCode == HttpStatusCode.Accepted)
-                        {
-                            Log.LogInformation($"Request to create storage account {storageAccount.Name} was accepted");
-                        }
-                        else
-                        {
-                            var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(jsonTextReader);
-                            throw new AzureResourceException("Unexpected status code", response.StatusCode, errorResponse.Error);
-                        }
-                    }
+                            if (statusCode == HttpStatusCode.Accepted)
+                            {
+                                Log.LogInformation($"Request to create storage account {storageAccount.Name} was accepted");
+                                return null;
+                            }
+
+                            var errorResponse = Json.Deserialize<ErrorResponse>(jsonTextReader);
+                            throw new AzureResourceException(
+                                "Unexpected status code for storage account create", statusCode, errorResponse.Error);
+                        },
+                        ct);
                 }
 
                 await Task.Delay(100, ct);
 
-            } while (true);
+            } while (createdStorageAccount == null);
+
+            return createdStorageAccount;
         }
 
         public async Task DeleteStorageAccount(
@@ -86,27 +89,28 @@ namespace azure.Storage
             var urlPart = id.Split('/').Skip(4).Aggregate((acc, part) => acc + '/' + part);
 
             var requestUri = $"/subscriptions/{_azureOptions.SubscriptionId}/resourceGroups/{urlPart}?api-version={apiVersion}";
-            var response = await Client.DeleteAsync(requestUri, ct);
-            using (response)
+            using (var request = new HttpRequestMessage(HttpMethod.Delete, requestUri))
             {
-                if (response.StatusCode == HttpStatusCode.OK)
-                {
-                    Log.LogInformation($"Storage account deleted: {id}");
-                }
-                else if (response.StatusCode == HttpStatusCode.NoContent)
-                {
-                    Log.LogInformation($"Storage account did not exist: {id}");
-                }
-                else
-                {
-                    using (var responseStream = await response.Content.ReadAsStreamAsync())
-                    using (var streamReader = new StreamReader(responseStream))
-                    using (var jsonTextReader = new JsonTextReader(streamReader))
+                await Http.SendRequestAndDecodeResponse(
+                    Client,
+                    request,
+                    (statusCode, jsonTextReader) =>
                     {
-                        var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(jsonTextReader);
-                        throw new AzureResourceException("Unexpected status code", response.StatusCode, errorResponse.Error);
-                    }
-                }
+                        if (statusCode == HttpStatusCode.OK)
+                        {
+                            Log.LogInformation($"Storage account deleted: {id}");
+                        }
+                        else if (statusCode == HttpStatusCode.NoContent)
+                        {
+                            Log.LogInformation($"Storage account did not exist: {id}");
+                        }
+                        else
+                        {
+                            var errorResponse = Json.Deserialize<ErrorResponse>(jsonTextReader);
+                            throw new AzureResourceException("Unexpected status code for storage account delete", statusCode, errorResponse.Error);
+                        }
+                    },
+                    ct);
             }
         }
 
@@ -132,20 +136,23 @@ namespace azure.Storage
             };
 
             using (request)
-            using (var response = await Client.SendAsync(request, ct))
-            using (var responseStream = await response.Content.ReadAsStreamAsync())
-            using (var streamReader = new StreamReader(responseStream))
-            using (var jsonTextReader = new JsonTextReader(streamReader))
             {
-                if (response.StatusCode == HttpStatusCode.Created)
-                {
-                    var roleAssignment = JsonSerializer.Deserialize<RoleAssignment>(jsonTextReader);
-                    return roleAssignment;
-                }
+                return await Http.SendRequestAndDecodeResponse(
+                    Client,
+                    request,
+                    (statusCode, jsonTextReader) =>
+                    {
+                        if (statusCode == HttpStatusCode.Created)
+                        {
+                            var roleAssignment = Json.Deserialize<RoleAssignment>(jsonTextReader);
+                            return roleAssignment;
+                        }
 
-                // No 200 response, must be an error.
-                var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(jsonTextReader);
-                throw new AzureResourceException("Unexpected response code", response.StatusCode, errorResponse.Error);
+                        // No 200 response, must be an error.
+                        var errorResponse = Json.Deserialize<ErrorResponse>(jsonTextReader);
+                        throw new AzureResourceException("Unexpected response code for role assignment", statusCode, errorResponse.Error);
+                    },
+                    ct);
             }
         }
 
@@ -154,28 +161,29 @@ namespace azure.Storage
         {
             var urlPart = $"{storageAccountId}/listKeys?api-version={apiVersion}";
             using (var request = new HttpRequestMessage(HttpMethod.Post, urlPart))
-            using (var response = await Client.SendAsync(request, ct))
             {
-                using (var responseStream = await response.Content.ReadAsStreamAsync())
-                using (var streamReader = new StreamReader(responseStream))
-                using (var jsonTextReader = new JsonTextReader(streamReader))
-                {
-                    if (response.StatusCode == HttpStatusCode.OK)
+                return await Http.SendRequestAndDecodeResponse(
+                    Client,
+                    request,
+                    (statusCode, jsonTextReader) =>
                     {
-                        var storageAccountListKeysResult =
-                            JsonSerializer.Deserialize<StorageAccountListKeysResult>(jsonTextReader);
-                        return storageAccountListKeysResult.Keys;
-                    }
+                        if (statusCode == HttpStatusCode.OK)
+                        {
+                            var storageAccountListKeysResult =
+                                Json.Deserialize<StorageAccountListKeysResult>(jsonTextReader);
+                            return storageAccountListKeysResult.Keys;
+                        }
 
-                    var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(jsonTextReader);
-                    throw new AzureResourceException("Unexpected status code", response.StatusCode, errorResponse.Error);
-                }
+                        var errorResponse = Json.Deserialize<ErrorResponse>(jsonTextReader);
+                        throw new AzureResourceException("Unexpected status code for access keys get", statusCode, errorResponse.Error);
+                    },
+                    ct);
             }
         }
 
         private class StorageAccountListKeysResult
         {
-            public StorageAccountKey[] Keys { get; set; }
+            public StorageAccountKey[] Keys { get; private set; }
         }
     }
 }

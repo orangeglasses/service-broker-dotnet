@@ -144,6 +144,21 @@ namespace broker.Bindings
             };
         }
 
+        public async Task UnbindAsync(ServiceBindingContext context, string serviceId, string planId)
+        {
+            LogContext(_log, "Unbind", context);
+            _log.LogInformation($"Deprovision: {{ service_id = {serviceId}, planId = {planId} }}");
+
+            // Delete Azure AD application.
+            var bindingId = context.BindingId;
+            await _msGraphClient.DeleteApplication(bindingId);
+        }
+
+        public Task<ServiceBindingResource> FetchAsync(string instanceId, string bindingId)
+        {
+            throw new NotImplementedException();
+        }
+
         private async Task GrantPrincipalAccessToStorageAccount(string storageAccountId, Guid roleId, Guid principalId)
         {
             var principalFound = true;
@@ -163,19 +178,6 @@ namespace broker.Bindings
                     }
                 }
             } while (!principalFound);
-        }
-
-        public Task UnbindAsync(ServiceBindingContext context, string serviceId, string planId)
-        {
-            LogContext(_log, "Unbind", context);
-            _log.LogInformation($"Deprovision: {{ service_id = {serviceId}, planId = {planId} }}");
-
-            return Task.CompletedTask;
-        }
-
-        public Task<ServiceBindingResource> FetchAsync(string instanceId, string bindingId)
-        {
-            throw new NotImplementedException();
         }
 
         private static void LogContext(ILogger log, string operation, ServiceBindingContext context)

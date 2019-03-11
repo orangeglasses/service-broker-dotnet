@@ -1,5 +1,4 @@
-﻿using System.IO;
-using System.Linq;
+﻿using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -7,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using azure.Config;
 using azure.Errors;
+using azure.Lib;
 using azure.ResourceGroups.Model;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -18,10 +18,12 @@ namespace azure.ResourceGroups
     {
         public const string DefaultApiVersion = "2018-05-01";
 
-        private AzureOptions _azureOptions;
+        private readonly AzureOptions _azureOptions;
 
-        public AzureResourceGroupClient(HttpClient client, IOptions<AzureOptions> azureOptions, ILogger<AzureResourceGroupClient> log)
-            : base(client, log)
+        public AzureResourceGroupClient(
+            HttpClient client, IHttp http, IJson json, IOptions<AzureOptions> azureOptions,
+            ILogger<AzureResourceGroupClient> log)
+            : base(client, http, json, log)
         {
             _azureOptions = azureOptions.Value;
         }
@@ -32,19 +34,26 @@ namespace azure.ResourceGroups
 
             var requestUri = $"/subscriptions/{_azureOptions.SubscriptionId}/resourcegroups/{name}?api-version={DefaultApiVersion}";
             using (var request = new HttpRequestMessage(HttpMethod.Head, requestUri))
-            using (var response = await Client.SendAsync(request, ct))
             {
-                switch (response.StatusCode)
-                {
-                    case HttpStatusCode.NotFound:
-                        Log.LogDebug("Resource group does not exist: {name}", name);
-                        return false;
-                    case HttpStatusCode.NoContent:
-                        Log.LogDebug("Resource group exists: {name}", name);
-                        return true;
-                }
+                return await Http.SendRequestAndDecodeResponse(
+                    Client,
+                    request,
+                    (statusCode, jsonTextReader) =>
+                    {
+                        switch (statusCode)
+                        {
+                            case HttpStatusCode.NotFound:
+                                Log.LogDebug("Resource group does not exist: {name}", name);
+                                return false;
+                            case HttpStatusCode.NoContent:
+                                Log.LogDebug("Resource group exists: {name}", name);
+                                return true;
+                        }
 
-                throw new AzureResourceException("Unexpected status code", response.StatusCode);
+                        var errorResponse = Json.Deserialize<ErrorResponse>(jsonTextReader);
+                        throw new AzureResourceException("Unexpected status code", statusCode, errorResponse.Error);
+                    },
+                    ct);
             }
         }
 
@@ -52,44 +61,55 @@ namespace azure.ResourceGroups
         {
             var resourceGroupName = resourceGroup.Name;
             var serializedResourceGroup =
-                JsonConvert.SerializeObject(resourceGroup, Formatting.None, JsonSerializerSettings);
-
+                JsonConvert.SerializeObject(resourceGroup, Formatting.None, Json.JsonSerializerSettings);
             var requestUri = $"/subscriptions/{_azureOptions.SubscriptionId}/resourcegroups/{resourceGroupName}?api-version={apiVersion}";
-            var response = await Client.PutAsync(
-                requestUri,
-                new StringContent(serializedResourceGroup, Encoding.UTF8, "application/json"),
-                ct);
-            using (response)
-            using (var responseStream = await response.Content.ReadAsStreamAsync())
-            using (var streamReader = new StreamReader(responseStream))
-            using (var jsonTextReader = new JsonTextReader(streamReader))
+            var request = new HttpRequestMessage(HttpMethod.Put, requestUri)
             {
-                if (response.StatusCode == HttpStatusCode.OK || response.StatusCode == HttpStatusCode.Created)
-                {
-                    return JsonSerializer.Deserialize<ResourceGroup>(jsonTextReader);
-                }
+                Content = new StringContent(serializedResourceGroup, Encoding.UTF8, "application/json")
+            };
+            using (request)
+            {
+                return await Http.SendRequestAndDecodeResponse(
+                    Client,
+                    request,
+                    (statusCode, jsonTextReader) =>
+                    {
+                        if (statusCode == HttpStatusCode.OK || statusCode == HttpStatusCode.Created)
+                        {
+                            return Json.Deserialize<ResourceGroup>(jsonTextReader);
+                        }
 
-                var errorResponse = JsonSerializer.Deserialize<ErrorResponse>(jsonTextReader);
-                throw new AzureResourceException("Unexpected status code", response.StatusCode, errorResponse.Error);
+                        var errorResponse = Json.Deserialize<ErrorResponse>(jsonTextReader);
+                        throw new AzureResourceException(
+                            "Unexpected status code for resource group create", statusCode, errorResponse.Error);
+                    },
+                    ct);
             }
         }
 
         public async Task<bool> DeleteResourceGroupIfEmpty(string name, string apiVersion = DefaultApiVersion, CancellationToken ct = default)
         {
             // First get all resources from group: only delete if empty.
-            var groupIsEmpty = false;
+            bool groupIsEmpty;
             var getRequestUri = $"/subscriptions/{_azureOptions.SubscriptionId}/resourcegroups/{name}/resources?api-version={apiVersion}";
             using (var request = new HttpRequestMessage(HttpMethod.Get, getRequestUri))
-            using (var response = await Client.SendAsync(request, ct))
             {
-                if (response.StatusCode == HttpStatusCode.OK)
-                {
-                    var resourceListResult = await DeserializeResponse<ResourceListResult>(response);
-                    if (!resourceListResult.Resources.Any())
+                groupIsEmpty = await Http.SendRequestAndDecodeResponse(
+                    Client,
+                    request,
+                    (statusCode, jsonTextReader) =>
                     {
-                        groupIsEmpty = true;
-                    }
-                }
+                        if (statusCode == HttpStatusCode.OK)
+                        {
+                            var resourceListResult = Json.Deserialize<ResourceListResult>(jsonTextReader);
+                            return !resourceListResult.Resources.Any();
+                        }
+
+                        var errorResponse = Json.Deserialize<ErrorResponse>(jsonTextReader);
+                        throw new AzureResourceException(
+                            "Unexpected response code for resource list get", statusCode, errorResponse.Error);
+                    },
+                    ct);
             }
 
             if (groupIsEmpty)
@@ -97,53 +117,51 @@ namespace azure.ResourceGroups
                 var requestUri = $"/subscriptions/{_azureOptions.SubscriptionId}/resourcegroups/{name}?api-version={apiVersion}";
                 using (var deleteRequest = new HttpRequestMessage(HttpMethod.Delete, requestUri))
                 {
-                    using (var deleteResponse = await Client.SendAsync(deleteRequest, ct))
-                    {
-                        if (deleteResponse.StatusCode == HttpStatusCode.OK)
+                    return await Http.SendRequestAndDecodeResponse(
+                        Client,
+                        deleteRequest,
+                        async (statusCode, jsonTextReader) =>
                         {
-                            Log.LogInformation($"Resource group {name} deleted");
-                            return true;
-                        }
-
-                        if (deleteResponse.StatusCode == HttpStatusCode.Accepted)
-                        {
-                            Log.LogInformation($"Delete resource group {name} started");
-
-                            // Wait for resource group deletion.
-                            do
+                            if (statusCode == HttpStatusCode.OK)
                             {
-                                await Task.Delay(100, ct);
+                                Log.LogInformation($"Resource group {name} deleted");
+                                return true;
+                            }
 
-                                using (var getRequest = new HttpRequestMessage(HttpMethod.Get, requestUri))
+                            if (statusCode == HttpStatusCode.Accepted)
+                            {
+                                Log.LogInformation($"Delete resource group {name} started");
+
+                                // Wait for resource group deletion.
+                                do
                                 {
-                                    var getResponse = await Client.SendAsync(getRequest, ct);
-                                    if (getResponse.StatusCode == HttpStatusCode.NotFound)
-                                    {
-                                        Log.LogInformation($"Resource group {name} no longer found: must be deleted");
-                                        return true;
-                                    }
+                                    await Task.Delay(100, ct);
 
-                                    if (getResponse.StatusCode == HttpStatusCode.OK)
+                                    using (var getRequest = new HttpRequestMessage(HttpMethod.Get, requestUri))
                                     {
-                                        Log.LogDebug($"Resource group {name} found: not yet deleted");
+                                        var getResponse = await Client.SendAsync(getRequest, ct);
+                                        if (getResponse.StatusCode == HttpStatusCode.NotFound)
+                                        {
+                                            Log.LogInformation($"Resource group {name} no longer found: must be deleted");
+                                            return true;
+                                        }
+
+                                        if (getResponse.StatusCode == HttpStatusCode.OK)
+                                        {
+                                            Log.LogDebug($"Resource group {name} found: not yet deleted");
+                                        }
                                     }
-                                }
-                            } while (true);
-                        }
-                    }
+                                } while (true);
+                            }
+
+                            var errorResponse = Json.Deserialize<ErrorResponse>(jsonTextReader);
+                            throw new AzureResourceException(
+                                "Unexpected response code for resource group delete", statusCode, errorResponse.Error);
+                        },
+                        ct);
                 }
             }
             return false;
-        }
-
-        private static async Task<T> DeserializeResponse<T>(HttpResponseMessage response)
-        {
-            using (var stream = await response.Content.ReadAsStreamAsync())
-            using (var streamReader = new StreamReader(stream))
-            using (var jsonTextReader = new JsonTextReader(streamReader))
-            {
-                return JsonSerializer.Deserialize<T>(jsonTextReader);
-            }
         }
 
         [JsonObject]

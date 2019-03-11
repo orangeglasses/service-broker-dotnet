@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -39,7 +38,7 @@ namespace azure.Storage
             var serializedStorageAccount =
                 JsonConvert.SerializeObject(storageAccount, Formatting.None, Json.JsonSerializerSettings);
 
-            StorageAccount createdStorageAccount = null;
+            StorageAccount createdStorageAccount;
             do
             {
                 var requestUri =
@@ -184,7 +183,7 @@ namespace azure.Storage
 
         private class StorageAccountListKeysResult
         {
-            public StorageAccountKey[] Keys { get; set; }
+            public StorageAccountKey[] Keys { get; private set; }
         }
     }
 }

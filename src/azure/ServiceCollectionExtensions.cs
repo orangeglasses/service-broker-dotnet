@@ -6,7 +6,6 @@ using azure.Lib;
 using azure.ResourceGroups;
 using azure.Storage;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 
 namespace azure
 {

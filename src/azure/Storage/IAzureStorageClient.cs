@@ -13,6 +13,10 @@ namespace azure.Storage
             string resourceGroupName, StorageAccount storageAccount, string apiVersion = AzureStorageClient.DefaultStorageApiVersion,
             CancellationToken ct = default);
 
+        Task<StorageAccount> GetStorageAccount(
+            string resourceGroupName, string storageAccountName, string apiVersion = AzureStorageClient.DefaultStorageApiVersion,
+            CancellationToken ct = default);
+
         Task DeleteStorageAccount(
             string id, string apiVersion = AzureStorageClient.DefaultStorageApiVersion, CancellationToken ct = default);
 
@@ -22,5 +26,14 @@ namespace azure.Storage
 
         Task<IEnumerable<StorageAccountKey>> GetStorageAccountKeys(string storageAccountId,
             string apiVersion = AzureStorageClient.DefaultStorageApiVersion, CancellationToken ct = default);
+
+        Task<bool> IsNameAvailable(
+            string storageAccountName, string apiVersion = AzureStorageClient.DefaultStorageApiVersion, CancellationToken ct = default);
+
+        Task<IEnumerable<StorageAccount>> ListStorageAccounts(
+            string apiVersion = AzureStorageClient.DefaultStorageApiVersion, CancellationToken ct = default);
+
+        Task<IEnumerable<StorageAccount>> GetStorageAccountsByTag(
+            string tagName, string tagValue, string apiVersion = AzureStorageClient.DefaultStorageApiVersion, CancellationToken ct = default);
     }
 }

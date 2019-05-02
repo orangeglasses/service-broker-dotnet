@@ -13,18 +13,15 @@ namespace broker.Instances
     public class ServiceInstanceBlocking : IServiceInstanceBlocking
     {
         private readonly IAzureResourceGroupClient _azureResourceGroupClient;
-        private readonly IAzureStorageProviderClient _azureStorageProviderClient;
         private readonly IAzureStorageClient _azureStorageClient;
         private readonly ILogger<ServiceInstanceBlocking> _log;
 
         public ServiceInstanceBlocking(
             IAzureResourceGroupClient azureResourceGroupClient,
-            IAzureStorageProviderClient azureStorageProviderClient,
             IAzureStorageClient azureStorageClient,
             ILogger<ServiceInstanceBlocking> log)
         {
             _azureResourceGroupClient = azureResourceGroupClient;
-            _azureStorageProviderClient = azureStorageProviderClient;
             _azureStorageClient = azureStorageClient;
             _log = log;
         }
@@ -111,7 +108,7 @@ namespace broker.Instances
 
             // First retrieve all storage accounts in the subscription because we do not have information here
             // about the resource group of the storage account we wish to delete.
-            var storageAccounts = await _azureStorageProviderClient.ListStorageAccounts();
+            var storageAccounts = await _azureStorageClient.ListStorageAccounts();
 
             // Find storage account with the tag containing the service instance id.
             var storageAccount = storageAccounts

@@ -4,6 +4,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using azure;
 using azure.Config;
+using broker.azure.storage.Instances;
 using broker.Bindings;
 using broker.Instances;
 using idunno.Authentication.Basic;
@@ -14,6 +15,7 @@ using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using operations;
 using OpenServiceBroker;
 using OpenServiceBroker.Bindings;
 using OpenServiceBroker.Catalogs;
@@ -47,10 +49,14 @@ namespace broker
                 })
                 .SetCompatibilityVersion(CompatibilityVersion.Version_2_2);
 
+            services.AddSingleton<IInstanceOps, Ops>();
+
             services
                 .AddTransient<ICatalogService, CatalogService>()
                 .AddTransient<IServiceInstanceBlocking, ServiceInstanceBlocking>()
+                .AddTransient<IServiceInstanceDeferred, ServiceInstanceDeferred>()
                 .AddTransient<IServiceBindingBlocking, ServiceBindingBlocking>()
+                .AddTransient<OpsEquality, StorageOpsEquality>()
                 .AddOpenServiceBroker();
 
             services

@@ -17,20 +17,17 @@ namespace broker.Bindings
 {
     public class ServiceBindingBlocking : IServiceBindingBlocking
     {
-        private readonly IAzureStorageProviderClient _azureStorageProviderClient;
         private readonly IAzureStorageClient _azureStorageClient;
         private readonly IMSGraphClient _msGraphClient;
         private readonly AzureAuthOptions _azureAuthOptions;
         private readonly ILogger<ServiceBindingBlocking> _log;
 
         public ServiceBindingBlocking(
-            IAzureStorageProviderClient azureStorageProviderClient,
             IAzureStorageClient azureStorageClient,
             IMSGraphClient msGraphClient,
             IOptions<AzureAuthOptions> azureAuthOptions,
             ILogger<ServiceBindingBlocking> log)
         {
-            _azureStorageProviderClient = azureStorageProviderClient;
             _azureStorageClient = azureStorageClient;
             _msGraphClient = msGraphClient;
             _azureAuthOptions = azureAuthOptions.Value;
@@ -43,7 +40,7 @@ namespace broker.Bindings
             LogRequest(_log, request);
 
             // Retrieve Azure Storage account.
-            var storageAccounts = await _azureStorageProviderClient.GetStorageAccountsByTag("cf_service_instance_id", context.InstanceId);
+            var storageAccounts = await _azureStorageClient.GetStorageAccountsByTag("cf_service_instance_id", context.InstanceId);
             var nrStorageAccounts = storageAccounts.Count();
             if (nrStorageAccounts == 0)
             {

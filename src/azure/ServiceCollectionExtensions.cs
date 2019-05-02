@@ -38,13 +38,6 @@ namespace azure
                 .AddHttpMessageHandler<AzureRMAuthorizationHandler>();
 
             services
-                .AddHttpClient<IAzureStorageProviderClient, AzureStorageProviderClient>((serviceProvider, client) =>
-                {
-                    client.BaseAddress = new Uri($"https://management.azure.com");
-                })
-                .AddHttpMessageHandler<AzureRMAuthorizationHandler>();
-
-            services
                 .AddHttpClient<IAzureStorageClient, AzureStorageClient>((serviceProvider, client) =>
                 {
                     client.BaseAddress = new Uri($"https://management.azure.com");

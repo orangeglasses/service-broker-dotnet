@@ -10,8 +10,6 @@ namespace azure.Auth
 {
     internal abstract class AzureAuthorizationHandler : DelegatingHandler
     {
-        private static readonly TokenCache AppTokenCache = new TokenCache();
-
         private readonly IConfidentialClientApplication _clientApplication;
 
         protected AzureAuthorizationHandler(IOptions<ConfidentialClientApplicationOptions> azureAuthOptions)

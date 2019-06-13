@@ -2,7 +2,6 @@ using System;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
-using azure.Config;
 using azure.Errors;
 using azure.Graph;
 using azure.Graph.Model;
@@ -10,6 +9,7 @@ using azure.Storage;
 using broker.Bindings.Model;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Identity.Client;
 using Newtonsoft.Json.Linq;
 using OpenServiceBroker.Bindings;
 
@@ -19,13 +19,13 @@ namespace broker.Bindings
     {
         private readonly IAzureStorageClient _azureStorageClient;
         private readonly IMSGraphClient _msGraphClient;
-        private readonly AzureAuthOptions _azureAuthOptions;
+        private readonly ConfidentialClientApplicationOptions _azureAuthOptions;
         private readonly ILogger<ServiceBindingBlocking> _log;
 
         public ServiceBindingBlocking(
             IAzureStorageClient azureStorageClient,
             IMSGraphClient msGraphClient,
-            IOptions<AzureAuthOptions> azureAuthOptions,
+            IOptions<ConfidentialClientApplicationOptions> azureAuthOptions,
             ILogger<ServiceBindingBlocking> log)
         {
             _azureStorageClient = azureStorageClient;

@@ -6,6 +6,7 @@ using azure.Lib;
 using azure.ResourceGroups;
 using azure.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Identity.Client;
 
 namespace azure
 {
@@ -14,7 +15,7 @@ namespace azure
         public static IServiceCollection AddAzureServices(
             this IServiceCollection services,
             Action<AzureOptions> configureAzureOptions,
-            Action<AzureAuthOptions> configureAzureAuthOptions)
+            Action<ConfidentialClientApplicationOptions> configureAzureAuthOptions)
         {
             if (services == null) throw new ArgumentNullException(nameof(services));
             if (configureAzureOptions == null) throw new ArgumentNullException(nameof(configureAzureOptions));

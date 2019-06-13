@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Microsoft.Identity.Client;
 using operations;
 using OpenServiceBroker;
 using OpenServiceBroker.Bindings;
@@ -150,7 +151,7 @@ namespace broker
             };
         }
 
-        private Action<AzureAuthOptions> ConfigureAzureAuth(IServiceCollection services, IHostingEnvironment env)
+        private Action<ConfidentialClientApplicationOptions> ConfigureAzureAuth(IServiceCollection services, IHostingEnvironment env)
         {
             if (env.IsDevelopment())
             {

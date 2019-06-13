@@ -3,6 +3,7 @@ applications:
 - name: rwwilden-broker
   memory: 128M
   disk: 500M
+  stack: cflinuxfs3
   instances: 1
   buildpacks:
   - dotnet_core_buildpack

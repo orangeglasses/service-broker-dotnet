@@ -3,7 +3,6 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
-using azure.Config;
 using Microsoft.Extensions.Options;
 using Microsoft.Identity.Client;
 
@@ -15,16 +14,13 @@ namespace azure.Auth
 
         private readonly IConfidentialClientApplication _clientApplication;
 
-        protected AzureAuthorizationHandler(IOptions<AzureAuthOptions> azureAuthOptions)
+        protected AzureAuthorizationHandler(IOptions<ConfidentialClientApplicationOptions> azureAuthOptions)
         {
             var azureAuth = azureAuthOptions.Value;
-            _clientApplication = new ConfidentialClientApplication(
-                azureAuth.ClientId,
-                $"{azureAuth.Instance}{azureAuth.TenantId}",
-                $"https://{azureAuth.ClientId}",
-                new ClientCredential(azureAuth.ClientSecret),
-                null,
-                AppTokenCache);
+
+            _clientApplication = ConfidentialClientApplicationBuilder
+                .CreateWithApplicationOptions(azureAuth)
+                .Build();
         }
 
         protected abstract IEnumerable<string> Scopes { get; }
@@ -32,7 +28,9 @@ namespace azure.Auth
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             // Get authorization token from Azure AD.
-            var authenticationResult = await _clientApplication.AcquireTokenForClientAsync(Scopes);
+            var authenticationResult = await _clientApplication
+                .AcquireTokenForClient(Scopes)
+                .ExecuteAsync(ct);
 
             // Set authorization token on request.
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", authenticationResult.AccessToken);

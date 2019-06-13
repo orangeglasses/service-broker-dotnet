@@ -1,12 +1,13 @@
 ﻿using System.Collections.Generic;
-using azure.Config;
 using Microsoft.Extensions.Options;
+using Microsoft.Identity.Client;
 
 namespace azure.Auth
 {
     internal class MSGraphAuthorizationHandler : AzureAuthorizationHandler
     {
-        public MSGraphAuthorizationHandler(IOptions<AzureAuthOptions> azureAuthOptions) : base(azureAuthOptions)
+        public MSGraphAuthorizationHandler(IOptions<ConfidentialClientApplicationOptions> azureAuthOptions)
+            : base(azureAuthOptions)
         {
         }
 

@@ -1,12 +1,12 @@
 ﻿using System.Collections.Generic;
-using azure.Config;
 using Microsoft.Extensions.Options;
+using Microsoft.Identity.Client;
 
 namespace azure.Auth
 {
     internal class AzureRMAuthorizationHandler : AzureAuthorizationHandler
     {
-        public AzureRMAuthorizationHandler(IOptions<AzureAuthOptions> azureAuthOptions)
+        public AzureRMAuthorizationHandler(IOptions<ConfidentialClientApplicationOptions> azureAuthOptions)
             : base(azureAuthOptions)
         {
         }

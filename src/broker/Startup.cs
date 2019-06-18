@@ -173,7 +173,6 @@ namespace broker
                 // Configure options.
                 options.ClientId = credentials["ClientId"].Value;
                 options.ClientSecret = credentials["ClientSecret"].Value;
-                options.Instance = credentials["Instance"].Value;
                 options.TenantId = credentials["TenantId"].Value;
             };
         }

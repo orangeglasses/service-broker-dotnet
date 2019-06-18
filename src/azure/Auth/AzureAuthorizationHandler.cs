@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Identity.Client;
 
@@ -11,10 +12,13 @@ namespace azure.Auth
     internal abstract class AzureAuthorizationHandler : DelegatingHandler
     {
         private readonly IConfidentialClientApplication _clientApplication;
+        private readonly ILogger<AzureAuthorizationHandler> _log;
 
-        protected AzureAuthorizationHandler(IOptions<ConfidentialClientApplicationOptions> azureAuthOptions)
+        protected AzureAuthorizationHandler(
+            IOptions<ConfidentialClientApplicationOptions> azureAuthOptions, ILogger<AzureAuthorizationHandler> log)
         {
             var azureAuth = azureAuthOptions.Value;
+            _log = log;
 
             _clientApplication = ConfidentialClientApplicationBuilder
                 .CreateWithApplicationOptions(azureAuth)

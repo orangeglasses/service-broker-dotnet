@@ -57,7 +57,7 @@ namespace broker
                 .AddTransient<IServiceInstanceBlocking, ServiceInstanceBlocking>()
                 .AddTransient<IServiceInstanceDeferred, ServiceInstanceDeferred>()
                 .AddTransient<IServiceBindingBlocking, ServiceBindingBlocking>()
-                .AddTransient<OpsEquality, StorageOpsEquality>()
+                .AddTransient<ProvisioningOpEquality, StorageProvisioningOpEquality>()
                 .AddOpenServiceBroker();
 
             services

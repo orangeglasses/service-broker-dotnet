@@ -4,21 +4,35 @@ using OpenServiceBroker.Instances;
 
 namespace operations
 {
-    public abstract class OpsEquality : IEqualityComparer<ProvisioningOperation>
+    public class DeprovisioningOpEquality : IEqualityComparer<DeprovisioningOperation>
+    {
+        public bool Equals(DeprovisioningOperation x, DeprovisioningOperation y)
+        {
+            if (ReferenceEquals(x, y)) return true;
+            if (x is null || y is null) return false;
+            if (x.GetType() != y.GetType()) return false;
+
+            return string.Equals(x.ServiceId, y.ServiceId) && string.Equals(x.PlanId, y.PlanId);
+        }
+
+        public int GetHashCode(DeprovisioningOperation obj)
+        {
+            unchecked
+            {
+                return ((obj.ServiceId != null ? obj.ServiceId.GetHashCode() : 0) * 397) ^ (obj.PlanId != null ? obj.PlanId.GetHashCode() : 0);
+            }
+        }
+    }
+
+    public abstract class ProvisioningOpEquality : IEqualityComparer<ProvisioningOperation>
     {
         private static readonly ServiceInstanceProvisionRequestComparer RequestComparer = new ServiceInstanceProvisionRequestComparer();
 
         public bool Equals(ProvisioningOperation x, ProvisioningOperation y)
         {
-            if (ReferenceEquals(x, y))
-            {
-                return true;
-            }
-
-            if (x is null || y is null)
-            {
-                return false;
-            }
+            if (ReferenceEquals(x, y)) return true;
+            if (x is null || y is null) return false;
+            if (x.GetType() != y.GetType()) return false;
 
             var xReq = x.Request;
             var yReq = y.Request;
@@ -37,7 +51,7 @@ namespace operations
             }
         }
 
-        protected abstract bool OpsEquals((JObject xContext, JObject xParameters) x, (JObject xContext, JObject xParameters) y);
+        protected abstract bool OpsEquals((JObject xContext, JObject xParameters) x, (JObject yContext, JObject yParameters) y);
 
         protected abstract int OpsHashCode((JObject context, JObject parameters) obj);
 

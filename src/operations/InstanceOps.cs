@@ -12,18 +12,30 @@ namespace operations
     {
         private readonly ILogger<InstanceOps> _log;
         private ImmutableDictionary<ProvisioningOperation, string> _provisioningOperations;
+        private ImmutableDictionary<DeprovisioningOperation, string> _deprovisioningOperations;
 
-        protected InstanceOps(OpsEquality opsEquality, ILogger<InstanceOps> log)
+        protected InstanceOps(
+            ProvisioningOpEquality provisioningOpEquality, DeprovisioningOpEquality deprovisioningOpEquality,
+            ILogger<InstanceOps> log)
         {
             _log = log;
-            var builder = ImmutableDictionary.CreateBuilder<ProvisioningOperation, string>(opsEquality);
-            _provisioningOperations = builder.ToImmutable();
+            _provisioningOperations =
+                ImmutableDictionary.CreateBuilder<ProvisioningOperation, string>(provisioningOpEquality).ToImmutable();
+            _deprovisioningOperations =
+                ImmutableDictionary.CreateBuilder<DeprovisioningOperation, string>(deprovisioningOpEquality).ToImmutable();
         }
 
-        public abstract Task<bool> ServiceExists(ServiceInstanceContext context, ServiceInstanceProvisionRequest request, CancellationToken ct = default);
+        public abstract Task<ServiceExistence> ServiceExists(
+            ServiceInstanceContext context, ServiceInstanceProvisionRequest request, CancellationToken ct = default);
+
+        public abstract Task<bool> ServiceExists(
+            ServiceInstanceContext context, string serviceId = null, string planId = null, CancellationToken ct = default);
 
         protected abstract Task StartProvisioningOperation(string operationId, ServiceInstanceContext context,
             ServiceInstanceProvisionRequest request, CancellationToken ct = default);
+
+        protected abstract Task StartDeprovisioningOperation(string operationId, ServiceInstanceContext context,
+            string serviceId, string planId, CancellationToken ct = default);
 
         public (bool started, string operationId) StartProvisioningOperation(ServiceInstanceContext context, ServiceInstanceProvisionRequest request)
         {
@@ -36,39 +48,69 @@ namespace operations
             // to the provided equality comparer. In this case, return the new operation id. If the operation already
             // exists, return the existing operation id.
             var provisioningOperation = new ProvisioningOperation(newOperationId, context, request);
-            var currentOperationId = ImmutableInterlocked.AddOrUpdate(
-                ref _provisioningOperations,
+
+            return StartOperation(
                 provisioningOperation,
+                _provisioningOperations,
+                (operation, ct) => StartProvisioningOperation(operation.OperationId, operation.Context, operation.Request, ct));
+        }
+
+        public (bool started, string operationId) StartDeprovisioningOperation(ServiceInstanceContext context, string serviceId, string planId)
+        {
+            LogContext(_log.LogInformation, "Deprovision", context);
+            _log.LogInformation($"Deprovision: {{ service_id = {serviceId}, plan_id = {planId} }}");
+
+            var newOperationId = Guid.NewGuid().ToString();
+
+            // Add a new deprovisioning operation to the list if a deprovisioning operation does not yet exist according
+            // to the provided equality comparer. In this case, return the new operation id. If the operation already
+            // exists, return the existing operation id.
+            var deprovisioningOperation = new DeprovisioningOperation(newOperationId, context, serviceId, planId);
+
+            return StartOperation(
+                deprovisioningOperation,
+                _deprovisioningOperations,
+                (operation, ct) => StartDeprovisioningOperation(operation.OperationId, operation.Context, operation.ServiceId, operation.PlanId, ct));
+        }
+
+        private static (bool started, string operationId) StartOperation<T>(
+            T operation, ImmutableDictionary<T, string> operations, Func<T, CancellationToken, Task> innerOp)
+            where T : Operation
+        {
+            // Add a new (de)provisioning operation to the list if a (de)provisioning operation does not yet exist according
+            // to the provided equality comparer. In this case, return the new operation id. If the operation already
+            // exists, return the existing operation id.
+            var newOperationId = operation.OperationId;
+            var currentOperationId = ImmutableInterlocked.AddOrUpdate(
+                ref operations,
+                operation,
                 newOperationId,
-                (operation, existingOperationId) => existingOperationId);
+                (op, existingOperationId) => existingOperationId);
 
             // We now know whether a new operation was added or an attempt was made to start a provisioning operation
             // with the same parameters as a running operation.
             if (currentOperationId == newOperationId)
             {
                 // This is a new provisioning operation so we need to start the provisioning process.
-                var cancellationToken = provisioningOperation.CancellationTokenSource.Token;
+                var cancellationToken = operation.CancellationTokenSource.Token;
+
                 Task.Factory.StartNew(
                     async () =>
                     {
-                        var op = provisioningOperation;
-                        var newOpId = newOperationId;
-                        var opContext = context;
-                        var opRequest = request;
+                        var op = operation;
+                        var operationTask = innerOp(op, cancellationToken);
+                        op.ProvisioningOperationTaskStatus = () => operationTask.Status;
 
-                        var provisioningOperationTask = StartProvisioningOperation(newOpId, opContext, opRequest, cancellationToken);
-                        op.ProvisioningOperationTaskStatus = () => provisioningOperationTask.Status;
-
-                        // Always remove the provisioning operation from the list of running operations.
-                        await provisioningOperationTask
+                        // Always remove the (de)provisioning operation from the list of running operations.
+                        await operationTask
                             // ReSharper disable once MethodSupportsCancellation
                             .ContinueWith(async _ =>
                             {
                                 // ReSharper disable once MethodSupportsCancellation
                                 await Task.Delay(TimeSpan.FromSeconds(60)).ConfigureAwait(false);
 
-                                // Clean up provisioning operation.
-                                ImmutableInterlocked.TryRemove(ref _provisioningOperations, op, out var _);
+                                // Clean up (de)provisioning operation.
+                                ImmutableInterlocked.TryRemove(ref operations, op, out var _);
                             })
                             .Unwrap()
                             .ConfigureAwait(false);
@@ -84,7 +126,7 @@ namespace operations
             return (started: false, operationId: currentOperationId);
         }
 
-        public ProvisioningOperationProgress GetProvisioningOperationProgress(
+        public OperationProgress GetProvisioningOperationProgress(
             ServiceInstanceContext context, string serviceId = null, string planId = null, string operation = null)
         {
             var instanceId = context.InstanceId;
@@ -108,7 +150,7 @@ namespace operations
                 }
 
                 // Found provisioning operation: return status.
-                return new ProvisioningOperationProgress
+                return new OperationProgress
                 {
                     State = runningProvisioningOperation.OperationState
                 };

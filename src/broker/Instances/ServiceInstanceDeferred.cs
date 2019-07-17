@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using operations;
 using OpenServiceBroker;
+using OpenServiceBroker.Errors;
 using OpenServiceBroker.Instances;
 
 namespace broker.Instances
@@ -20,9 +21,10 @@ namespace broker.Instances
 
         public async Task<ServiceInstanceAsyncOperation> ProvisionAsync(ServiceInstanceContext context, ServiceInstanceProvisionRequest request)
         {
-            // Check whether a service already exists with the exact same parameters. If so, return
+            // Check whether a service already exists with the exact same or different attributes. If so, return
             // unchanged (will result in 200 OK).
-            if (await _instanceOps.ServiceExists(context, request))
+            var serviceExistence = await _instanceOps.ServiceExists(context, request);
+            if (serviceExistence == ServiceExistence.Exists)
             {
                 return new ServiceInstanceAsyncOperation
                 {
@@ -32,6 +34,11 @@ namespace broker.Instances
                         Unchanged = true
                     }
                 };
+            }
+
+            if (serviceExistence == ServiceExistence.ExistsWithDifferentAttributes)
+            {
+                throw new ConflictException();
             }
 
             var (started, operationId) = _instanceOps.StartProvisioningOperation(context, request);
@@ -64,6 +71,14 @@ namespace broker.Instances
 
         public async Task<AsyncOperation> DeprovisionAsync(ServiceInstanceContext context, string serviceId = null, string planId = null)
         {
+            if (!await _instanceOps.ServiceExists(context, serviceId, planId))
+            {
+                // Service does not exist with the specified parameters.
+                throw new GoneException();
+            }
+
+            var (started, operationId) = _instanceOps.StartDeprovisioningOperation(context, serviceId, planId);
+
             throw new NotImplementedException();
         }
 

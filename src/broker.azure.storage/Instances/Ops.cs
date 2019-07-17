@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using azure.ResourceGroups;
@@ -18,15 +19,18 @@ namespace broker.azure.storage.Instances
         private readonly IAzureStorageClient _azureStorageClient;
         private readonly ILogger<Ops> _log;
 
-        public Ops(IAzureResourceGroupClient azureResourceGroupClient, IAzureStorageClient azureStorageClient, OpsEquality opsEquality, ILogger<Ops> log)
-            : base(opsEquality, log)
+        public Ops(
+            IAzureResourceGroupClient azureResourceGroupClient, IAzureStorageClient azureStorageClient,
+            ProvisioningOpEquality provisioningOpEquality, DeprovisioningOpEquality deprovisioningOpEquality,
+            ILogger<Ops> log)
+            : base(provisioningOpEquality, deprovisioningOpEquality, log)
         {
             _azureResourceGroupClient = azureResourceGroupClient;
             _azureStorageClient = azureStorageClient;
             _log = log;
         }
 
-        public override async Task<bool> ServiceExists(
+        public override async Task<ServiceExistence> ServiceExists(
             ServiceInstanceContext context, ServiceInstanceProvisionRequest request, CancellationToken ct = default)
         {
             // Check if resource group exists.
@@ -37,14 +41,29 @@ namespace broker.azure.storage.Instances
 
             if (!resourceGroupExists)
             {
-                return false;
+                return ServiceExistence.DoesNotExist;
             }
 
             // Resource group exists: check if storage account exists in resource group.
             var storageAccountName = context.InstanceId.Replace("-", "").Substring(0, 24);
             var storageAccount = await _azureStorageClient.GetStorageAccount(resourceGroupName, storageAccountName, ct: ct);
             var storageAccountExists = storageAccount != null;
-            return storageAccountExists;
+            return storageAccountExists ? ServiceExistence.Exists : ServiceExistence.DoesNotExist;
+        }
+
+        public override async Task<bool> ServiceExists(
+            ServiceInstanceContext context, string serviceId = null, string planId = null, CancellationToken ct = default)
+        {
+            // First retrieve all storage accounts in the subscription because we do not have information here
+            // about the resource group of the storage account we wish to delete.
+            var storageAccounts = await _azureStorageClient.ListStorageAccounts(ct: ct);
+
+            // Find storage account with the tag containing the service instance id.
+            var storageAccount = storageAccounts
+                .SingleOrDefault(account => account.Tags
+                    .Any(tag => tag.Key == "cf_service_instance_id" && tag.Value == context.InstanceId));
+
+            return storageAccount != null;
         }
 
         protected override async Task StartProvisioningOperation(
@@ -59,6 +78,12 @@ namespace broker.azure.storage.Instances
             // Create storage account.
             var storageAccountName = context.InstanceId.Replace("-", "").Substring(0, 24);
             await CreateStorageAccount(resourceGroupName, storageAccountName, context, request, ct);
+        }
+
+        protected override async Task StartDeprovisioningOperation(
+            string operationId, ServiceInstanceContext context, string serviceId, string planId, CancellationToken ct = default)
+        {
+            throw new NotImplementedException();
         }
 
         private async Task CreateStorageAccount(
